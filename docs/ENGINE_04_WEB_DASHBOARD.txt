@@ -1,0 +1,111 @@
+================================================================================
+ENGINE 04: WEB - CONTROL, API GATEWAY & REQUEST DASHBOARD
+Project: HemoSync Blood Bank Management System
+Architecture: React 18 + Vite + Tailwind CSS (Port 5173) & Node.js Express (Port 3000)
+================================================================================
+
+1. OVERVIEW & OBJECTIVES
+--------------------------------------------------------------------------------
+The Web Control & Request Dashboard is the orchestrator and user interface of HemoSync.
+It ties together all four engines into a cohesive medical-technology application:
+  - Serves role-specific dashboards with distinct permissions (Donor, Staff, Admin, Requester)
+  - Acts as the central REST API Gateway mediating requests between React, MySQL,
+    the C++ OS Scheduler, and the C++ DSA Compatibility Matcher
+  - Secures endpoints using JSON Web Tokens (JWT) and bcrypt password hashing
+  - Renders live interactive visualizers for OS Queues, Compatibility Digraphs, and
+    DBMS Inventory batches.
+
+
+2. ARCHITECTURE & TECHNOLOGY STACK
+--------------------------------------------------------------------------------
+A. Frontend Stack (Port 5173):
+   - Library            : React 18 with React Router v6
+   - Bundler            : Vite 5 (fast Hot Module Replacement)
+   - Styling            : Tailwind CSS (clean medical design, responsive cards, alerts)
+   - Icons              : Lucide React (Droplet, Activity, Users, Shield, Clock, etc.)
+   - HTTP Client        : Axios with global Authorization Bearer token interceptor
+   - State Management   : React Context API (AuthContext providing login/logout/session)
+
+B. Backend API Stack (Port 3000):
+   - Runtime            : Node.js with Express.js
+   - Authentication     : JSON Web Tokens (jsonwebtoken) + bcryptjs (10 salt rounds)
+   - Database Connector : mysql2/promise (connection pooling with async/await)
+   - Inter-Engine IPC   : Axios HTTP client calling C++ Microservices (ports 5001 & 5002)
+   - Security Middleware: CORS, express.json(), JWT verification middleware
+
+
+3. FOUR DISTINCT USER ROLES & PERMISSIONS
+--------------------------------------------------------------------------------
+1. DONOR DASHBOARD (/donor):
+   - Profile summary with blood group badge (e.g. O+), donation history, and eligibility.
+   - Available slots explorer: filters by center, date, and priority level.
+   - 1-click slot reservation calling OS Engine.
+   - Active appointments tracker with live state indicators (waiting, confirmed, donated).
+   - Self-cancellation capability for eligible bookings.
+
+2. STAFF DASHBOARD (/staff):
+   - Live queue of arriving donors for today's shifts.
+   - Arrival check-in button (transitions state from 'waiting' to 'confirmed').
+   - Clinical donation recording modal (records blood pressure, hemoglobin, ml collected).
+   - Real-time stock levels of all 8 blood groups.
+
+3. ADMIN DASHBOARD (/admin):
+   - Metric overview cards: Total Registered Donors, Confirmed Appointments, Total Units,
+     Pending Hospital Orders.
+   - OS Scheduler Control Panel: Live algorithm switcher (FCFS / Priority / Round Robin).
+   - 50-thread concurrent booking stress test simulator with graphical metrics.
+   - Complete system audit logs with user IDs, IP addresses, and actions.
+   - User account management table.
+
+4. REQUESTER DASHBOARD (/requester):
+   - Hospital emergency request form (blood group, units needed, urgency, hospital name).
+   - Live compatibility check calling Engine 02 (DSA Matcher) to display alternative groups.
+   - Request order tracking (pending -> approved -> fulfilled).
+
+
+4. COMPLETE END-TO-END SYSTEM WORKFLOW (HOW ALL 4 ENGINES COLLABORATE)
+--------------------------------------------------------------------------------
+Below is the trace of an emergency blood request and fulfillment workflow across
+all four engines:
+
+[USER / FRONTEND]
+      |
+      | 1. Doctor submits emergency request for 2 units of B- blood.
+      v
+[NODE.JS API GATEWAY (Engine 04)]
+      |
+      | 2. Checks compatibility with Engine 02 (DSA Matcher).
+      v
+[C++ DSA ENGINE (Engine 02 - Port 5002)]
+      |
+      | 3. Directed Graph traversal finds compatible groups: [B-, O-].
+      |    Returns results to Node.js backend.
+      v
+[NODE.JS API GATEWAY]
+      |
+      | 4. Queries Engine 03 (DBMS MySQL) for available inventory.
+      v
+[MYSQL INNODB (Engine 03 - Port 3306)]
+      |
+      | 5. Executes FIFO query: checks B- units first, then O- units.
+      |    Row-locks chosen units using SELECT FOR UPDATE.
+      |    Updates unit status to 'transfused' and creates request_fulfilments row.
+      v
+[NODE.JS API GATEWAY]
+      |
+      | 6. Meanwhile, donor arrives to replenish stock.
+      |    Slot booking handled by Engine 01 (OS Scheduler - Port 5001).
+      v
+[C++ OS SCHEDULER (Engine 01 - Port 5001)]
+      |
+      | 7. FCFS/Priority queue resolves donor slot token with mutex protection.
+      |    Donor donates; Staff records vitals; New unit added to DBMS inventory.
+      v
+[REACT FRONTEND (Port 5173)]
+      |
+      | 8. Real-time dashboards update inventory charts, queue badges, and
+      |    request fulfillment status immediately for all logged-in roles!
+
+================================================================================
+END OF ENGINE 04 SPECIFICATION
+================================================================================

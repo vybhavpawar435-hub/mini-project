@@ -1,0 +1,119 @@
+================================================================================
+ENGINE 02: DSA - BLOOD COMPATIBILITY & GRAPH TRAVERSAL ENGINE
+Project: HemoSync Blood Bank Management System
+Architecture: C++17 Directed Graph & AVL Tree Microservice (Port 5002)
+================================================================================
+
+1. OVERVIEW & OBJECTIVES
+--------------------------------------------------------------------------------
+The DSA Compatibility Matcher is the medical logic and searching engine of HemoSync.
+It models all eight human blood groups (A+, A-, B+, B-, AB+, AB-, O+, O-) using
+rigorous Red Blood Cell (RBC) ABO and Rhesus (RhD) antigen/antibody biological rules.
+
+It demonstrates advanced Data Structures & Algorithms:
+  - Directed Graph (Digraph) representing "Can-Donate-To" and "Can-Receive-From" edges
+  - Breadth-First Search (BFS) for shortest medical transfusion paths
+  - Depth-First Search (DFS) for reachable recipient cluster exploration
+  - Self-Balancing AVL Binary Search Tree for O(log N) donor indexing
+  - Hash Maps (std::unordered_map) for O(1) blood group identifier lookups
+
+
+2. BIOLOGICAL RULES IMPLEMENTED (RED BLOOD CELL COMPATIBILITY)
+--------------------------------------------------------------------------------
+Compatibility is based strictly on Red Blood Cell (packed RBC) rules:
+  - Antigen Principle : Recipient cannot receive red cells with antigens foreign to them.
+  - Rh Factor Rule    : Rh-negative individuals can donate to Rh-negative and Rh-positive;
+                        Rh-positive individuals CANNOT donate to Rh-negative recipients.
+  - Universal Donor   : O- (has neither A, B, nor RhD antigens; safe for all 8 groups).
+  - Universal Acceptor: AB+ (has A, B, and RhD antigens; can receive from all 8 groups).
+
+Complete Compatibility Matrix:
+  Recipient Blood Group | Compatible Donor Blood Groups (Can Receive From)
+  ----------------------|-------------------------------------------------
+  O-                    | O-
+  O+                    | O+, O-
+  A-                    | A-, O-
+  A+                    | A+, A-, O+, O-
+  B-                    | B-, O-
+  B+                    | B+, B-, O+, O-
+  AB-                   | AB-, A-, B-, O-
+  AB+                   | ALL 8 GROUPS (AB+, AB-, A+, A-, B+, B-, O+, O-)
+
+
+3. DATA STRUCTURES IMPLEMENTED IN C++
+--------------------------------------------------------------------------------
+A. Directed Graph (Adjacency List):
+   - Vertices: 8 vertices representing the blood groups (indices 0 to 7).
+   - Edges: Directed edge (u -> v) exists if and only if blood group 'u' can safely donate
+     red blood cells to blood group 'v'.
+   - Stored using: std::vector<std::vector<int>> adj_list_
+   - Example Edges:
+       * O- -> { A+, A-, B+, B-, AB+, AB-, O+, O- } (Degree = 8)
+       * AB+ -> { AB+ } (Degree = 1)
+
+B. Breadth-First Search (BFS):
+   - Implemented using std::queue<int> and std::vector<bool> visited.
+   - Purpose: Explores compatibility layer-by-layer starting from any group.
+   - Time Complexity: O(V + E) where V = 8, E = 27 edges.
+
+C. Depth-First Search (DFS):
+   - Implemented using recursion with backtracking.
+   - Purpose: Discovers all connected downstream recipient branches.
+   - Time Complexity: O(V + E).
+
+D. Self-Balancing AVL Tree:
+   - Maintains an in-memory index of active registered donors sorted by Donor ID or Age.
+   - Ensures strict balance factor in {-1, 0, +1} using Left-Left (LL), Right-Right (RR),
+     Left-Right (LR), and Right-Left (RL) rotations.
+   - Guarantees O(log N) lookup time for searching donor eligibility records.
+
+E. Fast Hash Map Indexing:
+   - std::unordered_map<std::string, int> maps names ("O+", "AB-") to graph indices in O(1).
+   - std::unordered_map<int, std::string> maps vertex index back to string representation.
+
+
+4. REST API ENDPOINTS EXPOSED BY THE C++ ENGINE
+--------------------------------------------------------------------------------
+- POST /api/compatibility/check
+    Input : { "donor_blood_group": "O-", "recipient_blood_group": "AB+" }
+    Output: { "compatible": true, "rule": "RBC ABO & Rh compatibility", ... }
+
+- GET /api/compatibility/compatible-donors?recipient=B-
+    Output: { "recipient": "B-", "compatible_donors": ["B-", "O-"] }
+
+- GET /api/compatibility/can-donate-to?donor=A+
+    Output: { "donor": "A+", "can_donate_to": ["A+", "AB+"] }
+
+- GET /api/compatibility/graph
+    Output: Full JSON representation of the 8 nodes and all 27 directed edges.
+
+- GET /api/compatibility/traversal?start=O-&type=bfs
+    Output: Traversal order and visited nodes sequence.
+
+
+5. STEP-BY-STEP WORKFLOW IN THE COMPLETE PROJECT
+--------------------------------------------------------------------------------
+STEP 1: Hospital Submits Blood Request
+  - A doctor on the Requester Dashboard needs 2 units of B- blood for emergency surgery.
+  - Doctor submits blood group "B-" and urgency "Critical".
+
+STEP 2: Compatibility Query to C++ Engine
+  - Node.js backend intercepts request and calls C++ Engine:
+    GET http://localhost:5002/api/compatibility/compatible-donors?recipient=B-
+  - C++ Engine executes graph query: checks incoming directed edges to vertex "B-".
+  - Resolves compatible donor groups: ["B-", "O-"].
+
+STEP 3: Multi-Group Inventory Inspection
+  - Node.js backend queries MySQL database:
+    SELECT * FROM blood_inventory WHERE blood_group IN ('B-', 'O-') AND status = 'available';
+  - If exact match (B-) has 0 units, the system automatically checks alternative
+    compatible groups (O-) to fulfill the emergency request without manual calculation.
+
+STEP 4: Live Visualizer in the Frontend
+  - User opens "Compatibility Explorer" (/engines/compatibility).
+  - Graph is rendered interactively with nodes and arrows.
+  - Selecting any donor/recipient pair highlights the compatibility pathway in real time.
+
+================================================================================
+END OF ENGINE 02 SPECIFICATION
+================================================================================

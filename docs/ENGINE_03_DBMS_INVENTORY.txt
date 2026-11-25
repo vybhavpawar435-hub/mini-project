@@ -1,0 +1,124 @@
+================================================================================
+ENGINE 03: DBMS - INVENTORY, ACCOUNTS & RECORDS MANAGER
+Project: HemoSync Blood Bank Management System
+Architecture: MySQL 8.0+ / MariaDB (InnoDB Storage Engine, BCNF Normalized)
+Port: 3306 | Physical Files: C:\xampp\mysql\data\blood_bank_system\
+================================================================================
+
+1. OVERVIEW & OBJECTIVES
+--------------------------------------------------------------------------------
+The DBMS Engine serves as the persistent, ACID-compliant source of truth for all
+system data. It manages user credentials, donor medical records, time-slot capacities,
+blood unit inventory batches with strict 42-day expiry dates, and hospital request
+fulfillment records.
+
+It demonstrates key Database Management principles:
+  - Normalization to Boyce-Codd Normal Form (BCNF) eliminating anomalies
+  - ACID Transactions with commit and rollback guarantees
+  - Concurrency control using Row-Level Locking (SELECT ... FOR UPDATE)
+  - Declarative Integrity Constraints (Primary, Foreign, Unique, and Check Constraints)
+  - Triggers and Stored Procedures for automated business rule enforcement
+  - Write-Ahead Logging (WAL) and B-Tree indexing for high-speed indexing
+
+
+2. RELATIONAL SCHEMA & PHYSICAL STORAGE
+--------------------------------------------------------------------------------
+The database 'blood_bank_system' comprises 11 normalized tables:
+
+  Table Name            | Physical File (.ibd)   | Core Function
+  ----------------------|------------------------|--------------------------------------
+  users                 | users.ibd              | Authentication, bcrypt hashes, roles
+  donors                | donors.ibd             | Medical profile, blood group, stats
+  blood_groups          | blood_groups.ibd       | Reference table for 8 ABO/Rh types
+  donation_slots        | donation_slots.ibd     | Physical center locations, capacities
+  appointments          | appointments.ibd       | OS queue states, booking timestamps
+  donation_records      | donation_records.ibd   | Clinical vitals (Hb, BP, volume)
+  blood_inventory       | blood_inventory.ibd    | Individual blood bags, barcodes, exp
+  blood_requests        | blood_requests.ibd     | Hospital patient blood orders
+  request_fulfilments   | request_fulfilments.ibd| Junction mapping units to requests
+  audit_logs            | audit_logs.ibd         | Immutable system audit trail
+  scheduler_config      | scheduler_config.ibd   | Active OS scheduler algorithm state
+
+
+3. ACID TRANSACTIONS & BUSINESS LOGIC
+--------------------------------------------------------------------------------
+A. Atomic Donation Recording Transaction:
+   When staff records a completed donation at a blood collection center, four distinct
+   operations must execute as an indivisible unit:
+
+   START TRANSACTION;
+     -- 1. Insert clinical record into donation_records
+     INSERT INTO donation_records (appointment_id, donor_id, hemoglobin_level, 
+                                   blood_pressure, units_collected, staff_id)
+     VALUES (?, ?, ?, ?, 1, ?);
+
+     -- 2. Update appointment status from 'confirmed' to 'donated'
+     UPDATE appointments SET status = 'donated' WHERE id = ?;
+
+     -- 3. Insert newly collected blood unit into blood_inventory
+     -- (Expiry is calculated automatically as collection_date + INTERVAL 42 DAY)
+     INSERT INTO blood_inventory (batch_number, blood_group_id, donation_record_id, 
+                                  collection_date, expiry_date, status)
+     VALUES (?, ?, LAST_INSERT_ID(), NOW(), DATE_ADD(NOW(), INTERVAL 42 DAY), 'available');
+
+     -- 4. Increment donor lifetime donation counter
+     UPDATE donors SET total_donations = total_donations + 1, last_donation_date = CURDATE()
+     WHERE id = ?;
+   COMMIT;
+
+   If any statement fails (e.g., database constraint violation or network interruption),
+   ROLLBACK is executed immediately. No "orphan" inventory can appear without a clinical record!
+
+B. FIFO Inventory Fulfillment:
+   Blood units have a strict shelf life of 42 days (Red Blood Cells). When a hospital request
+   is fulfilled, units are allocated using First-In, First-Out (FIFO) based on earliest
+   expiry_date to minimize wastage:
+     SELECT id, batch_number, expiry_date 
+     FROM blood_inventory 
+     WHERE blood_group_id = ? AND status = 'available' AND expiry_date > NOW()
+     ORDER BY expiry_date ASC 
+     LIMIT ? FOR UPDATE;
+
+
+4. ROW-LEVEL LOCKING & PREVENTING DOUBLE-BOOKING
+--------------------------------------------------------------------------------
+To prevent two donors from booking the last open seat at the exact same millisecond:
+  1. The transaction initiates with:
+       SELECT current_capacity, max_capacity 
+       FROM donation_slots 
+       WHERE id = ? FOR UPDATE;
+  2. The InnoDB engine places an exclusive X-lock on the specific row in donation_slots.ibd.
+  3. Concurrent transactions attempting to book the same slot are queued until the first
+     transaction commits or rolls back.
+  4. If current_capacity < max_capacity, the booking is inserted and capacity incremented.
+  5. In addition, MySQL Trigger 'trg_check_slot_capacity' acts as a secondary safeguard,
+     throwing an SQLSTATE error if current bookings exceed maximum allowed.
+
+
+5. STEP-BY-STEP WORKFLOW IN THE COMPLETE PROJECT
+--------------------------------------------------------------------------------
+STEP 1: Registration & Authentication
+  - User registers via POST /api/auth/register.
+  - Node.js hashes password using bcrypt (10 salt rounds).
+  - DBMS inserts row into 'users' table; if role = 'donor', inserts row into 'donors'.
+  - Action is written to 'audit_logs' with IP and user ID.
+
+STEP 2: Slot Booking with Row Lock
+  - Donor reserves slot. Backend opens SQL transaction with SELECT FOR UPDATE.
+  - Slot capacity is checked, appointment inserted as 'waiting' or 'confirmed'.
+  - Slot current_capacity is updated. Transaction committed.
+
+STEP 3: Staff Records Blood Collection
+  - Staff verifies donor vitals.
+  - Executes atomic transaction (Record + Appointment Status + Inventory Unit + Counter).
+  - Physical unit appears in 'blood_inventory' with unique barcode and 42-day expiry.
+
+STEP 4: Request Fulfillment & Inventory Deduction
+  - Requester submits request for 2 units.
+  - Backend uses FIFO query with row locks, changes inventory unit status to 'transfused',
+    and links batch IDs in 'request_fulfilments'.
+  - Negative inventory is strictly prohibited by CHECK (total_units >= 0).
+
+================================================================================
+END OF ENGINE 03 SPECIFICATION
+================================================================================

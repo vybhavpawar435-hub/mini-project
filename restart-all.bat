@@ -1,0 +1,6 @@
+@echo off
+title Restart HemoSync Services
+echo Stopping existing processes on HemoSync ports...
+powershell -NoProfile -ExecutionPolicy Bypass -Command "Stop-Process -Name 'node', 'scheduler_engine', 'compatibility_engine' -Force -ErrorAction SilentlyContinue"
+echo Starting fresh instances...
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0run-all.ps1"

@@ -1,0 +1,137 @@
+================================================================================
+ENGINE 01: OS - DONOR SLOT SCHEDULER & CONCURRENCY ENGINE
+Project: HemoSync Blood Bank Management System
+Architecture: C++17 Multi-Threaded HTTP Microservice (Port 5001)
+================================================================================
+
+1. OVERVIEW & OBJECTIVES
+--------------------------------------------------------------------------------
+The OS Scheduler Engine is the primary engine responsible for managing donor
+appointments, resolving race conditions, enforcing concurrency safety, and
+allocating limited blood bank capacity among competing donor requests.
+
+It demonstrates fundamental Operating System principles:
+  - CPU & Process Scheduling Algorithms (FCFS, Non-Preemptive Priority, Round Robin)
+  - Mutual Exclusion (std::mutex and std::unique_lock)
+  - Resource Counting & Throttling (Counting Semaphores with std::condition_variable)
+  - Race Condition & Deadlock Prevention
+  - Strict Finite State Machine (FSM) for Donor Lifecycle Transitions
+
+
+2. INTERNAL ARCHITECTURE & DATA STRUCTURES
+--------------------------------------------------------------------------------
+A. DonorRequest Structure:
+   - donor_id          : Unique donor identifier (integer)
+   - slot_id           : Target appointment slot identifier (integer)
+   - arrival_time      : Chronological timestamp of request arrival (time_t)
+   - priority_level    : Urgency weight (1 = Critical/Urgent to 5 = Routine)
+   - allocated_time    : Accumulated time slice under Round Robin
+   - burst_time        : Simulated processing requirement (standard: 10 units)
+   - state             : Registered | Waiting | Confirmed | Donated | Cancelled
+
+B. Concurrency Primitives:
+   - queue_mutex_      : Guards the shared std::deque<DonorRequest> waiting queue.
+   - slot_mutexes_     : Hash map (std::unordered_map<int, std::mutex>) providing
+                         fine-grained row/slot-level locks, avoiding global bottlenecks.
+   - slot_capacities_  : Map tracking remaining physical capacity per slot.
+   - Semaphore (DonorSemaphore):
+     * Counting semaphore initialized with max concurrent donation bay tokens.
+     * Implemented using std::mutex, std::condition_variable, and wait_for timeouts
+       to guarantee deadlock-free execution under sudden burst traffic.
+
+
+3. THE THREE SCHEDULING ALGORITHMS
+--------------------------------------------------------------------------------
+1. FCFS (First-Come, First-Served):
+   - Principle: Strict chronological ordering based on arrival_time.
+   - Behavior: The donor whose booking request entered the queue first receives the
+     next available slot capacity token.
+   - Metric: Ensures fairness, eliminates starvation, but susceptible to convoy effects.
+
+2. Priority Scheduling (Non-Preemptive):
+   - Principle: Allocates slots based on urgency and blood scarcity.
+   - Priority Levels:
+       * Level 1: Emergency on-call donors (rare types: O-, AB-, B-)
+       * Level 2: Urgent scheduled replenishment
+       * Level 3: High-demand group scheduled donors
+       * Level 4: Standard replacement donors
+       * Level 5: Routine voluntary donors
+   - Implementation: Lower numerical value indicates strictly higher priority.
+     When a slot opens, the queue is scanned/sorted so Level 1 donors are dispatched first.
+
+3. Round Robin (Time-Quantum Simulation):
+   - Principle: Time-sliced dispatching for queue fairness under high burst load.
+   - Implementation: Each donor in the waiting queue receives a configured quantum slice
+     (default: 3 seconds / units). If slot verification is incomplete within the quantum,
+     the donor is placed at the tail of the ready queue until completion.
+   - Note: This models appointment scheduling dispatch fairness, not physically splitting
+     the blood draw procedure.
+
+
+4. DONOR FINITE STATE MACHINE (FSM)
+--------------------------------------------------------------------------------
+The engine strictly validates all state transitions. Illegal skips are rejected:
+
+      [REGISTERED]
+           |
+           v (enter queue)
+       [WAITING] ──────────────┐
+           |                   | (donor cancels or slot full)
+           v (slot confirmed)  v
+      [CONFIRMED]         [CANCELLED]
+           |
+           v (staff records donation)
+       [DONATED]
+
+Valid Transitions:
+  - REGISTERED -> WAITING   : Donor registers and requests an open slot.
+  - WAITING    -> CONFIRMED : Scheduler verifies capacity, acquires lock, confirms slot.
+  - CONFIRMED  -> DONATED   : Staff completes blood collection and commits inventory.
+  - WAITING    -> CANCELLED : Donor aborts or slot is closed before confirmation.
+  - CONFIRMED  -> CANCELLED : Slot reservation cancelled with capacity refunded.
+
+Illegal Transitions (Engine throws 400 Bad Request):
+  - REGISTERED -> DONATED   : Cannot donate without entering queue and confirmation.
+  - CANCELLED  -> CONFIRMED : Terminal state cannot transition back.
+  - DONATED    -> WAITING   : Completed donation cannot re-enter active queue.
+
+
+5. STEP-BY-STEP WORKFLOW IN THE COMPLETE PROJECT
+--------------------------------------------------------------------------------
+STEP 1: Donor Submits Slot Booking
+  - Donor selects a slot (e.g., Slot #4 at Main Center, Capacity = 1) on the Web UI.
+  - Node.js API receives POST /api/appointments/book.
+  - Node.js forwards request to C++ OS Engine at POST http://localhost:5001/api/scheduler/book.
+
+STEP 2: Mutex Lock Acquisition & Capacity Verification
+  - C++ Engine receives payload: { donor_id: 14, slot_id: 4, priority: 1, algorithm: "Priority" }.
+  - Engine acquires fine-grained std::unique_lock for Slot #4.
+  - Checks slot_capacities_[4].
+  - If capacity > 0:
+      * Decrements capacity by 1.
+      * Inserts donor into active queue.
+      * Updates donor state to CONFIRMED.
+      * Releases slot mutex lock.
+      * Returns HTTP 200 { success: true, status: "confirmed" }.
+  - If capacity == 0:
+      * Adds donor to WAITING queue or returns slot full response.
+      * If 50 simultaneous threads race for capacity 1, exactly ONE gets confirmed,
+        49 are safely rejected with zero race conditions.
+
+STEP 3: Live State Synchronization with MySQL DBMS
+  - Upon C++ engine confirmation, Node.js backend executes an ACID SQL transaction
+    with row-level lock (SELECT FOR UPDATE) committing the appointment row.
+  - State changes are broadcast to the Web Dashboard.
+
+STEP 4: Admin Algorithm Switching & Stress Test Simulation
+  - Admin navigates to /engines/scheduler on the Web Dashboard.
+  - Admin switches algorithm from FCFS to Priority or Round Robin.
+  - Node.js calls POST http://localhost:5001/api/scheduler/algorithm.
+  - Engine updates its active policy pointer immediately without restarting.
+  - When Admin clicks "Run 50-Thread Simulation", the C++ engine spawns 50 std::thread
+    workers simultaneously hammering 1 slot, outputting live contention metrics:
+    waiting time, slot utilization, confirmed vs. rejected ratios.
+
+================================================================================
+END OF ENGINE 01 SPECIFICATION
+================================================================================
