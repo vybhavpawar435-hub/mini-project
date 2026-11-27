@@ -1,9 +1,40 @@
 const express = require('express');
+const axios = require('axios');
 const db = require('../utils/db');
 const { authenticate, authorize } = require('../middleware/auth');
 const { logAudit } = require('../utils/audit');
 
 const router = express.Router();
+const COMPATIBILITY_ENGINE_URL = process.env.COMPATIBILITY_ENGINE_URL || 'http://localhost:5002';
+
+// Standard Red Blood Cell (RBC) donor-to-recipient compatibility fallback
+const RBC_COMPATIBLE_DONORS = {
+  'A+': ['A+', 'A-', 'O+', 'O-'],
+  'A-': ['A-', 'O-'],
+  'B+': ['B+', 'B-', 'O+', 'O-'],
+  'B-': ['B-', 'O-'],
+  'AB+': ['AB+', 'AB-', 'A+', 'A-', 'B+', 'B-', 'O+', 'O-'],
+  'AB-': ['AB-', 'A-', 'B-', 'O-'],
+  'O+': ['O+', 'O-'],
+  'O-': ['O-']
+};
+
+async function getCompatibleDonorGroups(recipientGroup) {
+  let groups = RBC_COMPATIBLE_DONORS[recipientGroup] || [recipientGroup];
+  try {
+    const res = await axios.get(
+      `${COMPATIBILITY_ENGINE_URL}/api/compatibility/donors?blood_group=${encodeURIComponent(recipientGroup)}`,
+      { timeout: 1500 }
+    );
+    if (res.data && Array.isArray(res.data.compatible_blood_groups) && res.data.compatible_blood_groups.length > 0) {
+      groups = res.data.compatible_blood_groups;
+    }
+  } catch (err) {
+    console.warn('DSA compatibility engine unreachable during fulfilment, using RBC fallback table:', err.message);
+  }
+  // Prioritize exact match first, then other compatible donor groups
+  return [recipientGroup, ...groups.filter((g) => g !== recipientGroup)];
+}
 
 // GET /api/inventory - Inventory overview and batches
 router.get('/', async (req, res) => {
@@ -159,9 +190,10 @@ router.post('/fulfilment', authenticate, authorize('staff', 'admin'), async (req
 
     // 1. Lock the blood request row
     const [reqs] = await conn.execute(`
-      SELECT id, blood_group_id, units_requested, status
-      FROM blood_requests
-      WHERE id = ?
+      SELECT br.id, br.blood_group_id, br.units_requested, br.status, bg.group_name as recipient_blood_group
+      FROM blood_requests br
+      JOIN blood_groups bg ON br.blood_group_id = bg.id
+      WHERE br.id = ?
       FOR UPDATE
     `, [request_id]);
 
@@ -171,9 +203,12 @@ router.post('/fulfilment', authenticate, authorize('staff', 'admin'), async (req
     }
 
     const request = reqs[0];
-    if (!['pending', 'approved', 'partially_fulfilled'].includes(request.status)) {
+    if (!['approved', 'partially_fulfilled'].includes(request.status)) {
       await conn.rollback();
-      return res.status(400).json({ success: false, message: `Cannot fulfill request with status '${request.status}'` });
+      return res.status(400).json({
+        success: false,
+        message: `Cannot fulfill request with status '${request.status}'. Request must be approved first.`
+      });
     }
 
     // 2. Check already fulfilled units
@@ -188,23 +223,34 @@ router.post('/fulfilment', authenticate, authorize('staff', 'admin'), async (req
       return res.status(400).json({ success: false, message: 'Request is already fully fulfilled' });
     }
 
-    // 3. Find available batches for this blood group, ordered by earliest expiry (FIFO)
-    const [batches] = await conn.execute(`
-      SELECT id, units_available, batch_number
-      FROM blood_inventory
-      WHERE blood_group_id = ? AND status = 'available' AND units_available > 0 AND expiry_date >= CURDATE()
-      ORDER BY expiry_date ASC
+    // 3. Resolve compatible donor blood groups via DSA compatibility engine (with RBC fallback)
+    const compatibleGroups = await getCompatibleDonorGroups(request.recipient_blood_group);
+
+    // 4. Find available compatible batches, prioritizing exact match then earliest expiry (FIFO)
+    const [batches] = await conn.query(`
+      SELECT bi.id, bi.units_available, bi.batch_number, bg.group_name as blood_group
+      FROM blood_inventory bi
+      JOIN blood_groups bg ON bi.blood_group_id = bg.id
+      WHERE bg.group_name IN (?)
+        AND bi.status = 'available'
+        AND bi.units_available > 0
+        AND bi.expiry_date >= CURDATE()
+      ORDER BY CASE WHEN bg.group_name = ? THEN 0 ELSE 1 END, bi.expiry_date ASC
       FOR UPDATE
-    `, [request.blood_group_id]);
+    `, [compatibleGroups, request.recipient_blood_group]);
 
     const totalAvailable = batches.reduce((sum, b) => sum + b.units_available, 0);
     if (totalAvailable === 0) {
       await conn.rollback();
-      return res.status(400).json({ success: false, message: 'No available stock for this blood group' });
+      return res.status(400).json({
+        success: false,
+        message: `No available compatible stock for ${request.recipient_blood_group} (checked: ${compatibleGroups.join(', ')})`
+      });
     }
 
     let remainingNeeded = needed;
     let totalFulfilledThisTime = 0;
+    const allocatedBatches = [];
 
     for (const batch of batches) {
       if (remainingNeeded <= 0) break;
@@ -220,10 +266,20 @@ router.post('/fulfilment', authenticate, authorize('staff', 'admin'), async (req
       );
 
       // Record fulfilment join
+      const allocNote = notes
+        ? `${notes} [Allocated ${take}u ${batch.blood_group} (${batch.batch_number})]`
+        : `Allocated ${take}u ${batch.blood_group} (${batch.batch_number})`;
       await conn.execute(`
         INSERT INTO request_fulfilments (request_id, inventory_id, units_fulfilled, fulfilled_by, notes)
         VALUES (?, ?, ?, ?, ?)
-      `, [request_id, batch.id, take, req.user.id, notes || null]);
+      `, [request_id, batch.id, take, req.user.id, allocNote]);
+
+      allocatedBatches.push({
+        inventory_id: batch.id,
+        batch_number: batch.batch_number,
+        blood_group: batch.blood_group,
+        units: take
+      });
 
       remainingNeeded -= take;
       totalFulfilledThisTime += take;
@@ -240,7 +296,7 @@ router.post('/fulfilment', authenticate, authorize('staff', 'admin'), async (req
 
     await logAudit(req.user.id, 'REQUEST_FULFILLED', 'blood_requests', request_id,
       { status: request.status },
-      { status: finalStatus, units_fulfilled: totalFulfilledThisTime },
+      { status: finalStatus, units_fulfilled: totalFulfilledThisTime, allocated_batches: allocatedBatches },
       req.ip
     );
 
@@ -251,7 +307,8 @@ router.post('/fulfilment', authenticate, authorize('staff', 'admin'), async (req
         request_id,
         status: finalStatus,
         units_fulfilled: totalFulfilledThisTime,
-        units_remaining: remainingNeeded
+        units_remaining: remainingNeeded,
+        allocated_batches: allocatedBatches
       }
     });
 

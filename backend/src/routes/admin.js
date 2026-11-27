@@ -50,10 +50,11 @@ router.get('/dashboard', authenticate, authorize('admin', 'staff'), async (req, 
     const [recentRequests] = await db.execute(`
       SELECT br.id, br.patient_name, br.hospital_name, br.units_requested,
              br.urgency, br.status, br.request_date,
-             bg.group_name as blood_group
+             bg.group_name as blood_group,
+             IFNULL((SELECT SUM(units_fulfilled) FROM request_fulfilments WHERE request_id = br.id), 0) as units_fulfilled
       FROM blood_requests br
       JOIN blood_groups bg ON br.blood_group_id = bg.id
-      ORDER BY br.created_at DESC
+      ORDER BY br.created_at DESC, br.id DESC
       LIMIT 5
     `);
 

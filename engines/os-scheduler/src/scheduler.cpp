@@ -11,7 +11,7 @@
 // Construction / Destruction
 // ─────────────────────────────────────────────────────────────────────────────
 DonorScheduler::DonorScheduler()
-    : sem_count_(100), sem_max_(100),
+    : sem_count_(100), sem_max_(100), peak_used_slots_(0),
       algorithm_(SchedulerAlgorithm::FCFS),
       time_quantum_(3), next_id_(1),
       confirmed_count_(0), rejected_count_(0), total_waiting_time_(0.0)
@@ -29,6 +29,10 @@ void DonorScheduler::semWait() {
     }
     if (sem_count_ > 0) {
         --sem_count_;
+        int used = sem_max_ - sem_count_;
+        if (used > peak_used_slots_) {
+            peak_used_slots_ = used;
+        }
     }
 }
 
@@ -275,8 +279,10 @@ SchedulerMetrics DonorScheduler::getMetrics() const {
     m.avg_waiting_time = (confirmed_count_ > 0)
                          ? (total_waiting_time_ / confirmed_count_)
                          : 0.0;
+    int current_used = sem_max_ - sem_count_;
+    int effective_used = std::max(current_used, peak_used_slots_);
     m.slot_utilization = (sem_max_ > 0)
-                         ? (static_cast<double>(sem_max_ - sem_count_) / sem_max_) * 100.0
+                         ? (static_cast<double>(effective_used) / sem_max_) * 100.0
                          : 0.0;
     return m;
 }

@@ -242,82 +242,126 @@ export const AdminDashboard = () => {
           </div>
 
           {/* Inventory Distribution */}
-          <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-2xs">
-            <h2 className="font-bold text-slate-900 text-base mb-3.5">Inventory by Blood Group</h2>
-            <div className="grid grid-cols-4 sm:grid-cols-8 gap-2.5">
-              {(stats?.inventory_distribution || []).map((item) => (
-                <div key={item.group_name} className="p-3 bg-slate-50/70 rounded-xl border border-slate-200 text-center">
-                  <span className="text-sm font-black text-red-600">{item.group_name}</span>
-                  <p className="text-xl font-extrabold text-slate-900 mt-0.5">{item.units_available}</p>
-                  <p className="text-[10px] text-slate-400 uppercase font-semibold">Units</p>
-                </div>
-              ))}
+          <div className="bg-white rounded-2xl border border-slate-200/90 p-5 sm:p-6 shadow-xs">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="font-bold text-slate-900 text-base">Inventory Breakdown by Blood Group</h2>
+                <p className="text-xs text-slate-500 mt-0.5">Live unexpired red blood cell units across all 8 ABO/Rh groups</p>
+              </div>
+              <span className="text-xs font-semibold text-slate-600 bg-slate-100 px-3 py-1 rounded-full">
+                {summary.total_units_available || 0} Total Units
+              </span>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
+              {(stats?.inventory_distribution || []).map((item) => {
+                const count = Number(item.units_available || 0);
+                return (
+                  <div
+                    key={item.group_name}
+                    className={`p-3.5 rounded-xl border text-center transition-all hover:shadow-xs ${
+                      count > 0
+                        ? 'bg-white border-slate-200 hover:border-red-300'
+                        : 'bg-slate-50/70 border-slate-200/70'
+                    }`}
+                  >
+                    <span className="text-sm font-black text-red-600 tracking-tight">{item.group_name}</span>
+                    <p className={`text-2xl font-extrabold mt-1 ${count > 0 ? 'text-slate-900' : 'text-slate-400'}`}>
+                      {count}
+                    </p>
+                    <p className="text-[10px] text-slate-400 uppercase font-semibold tracking-wider mt-0.5">
+                      Available
+                    </p>
+                  </div>
+                );
+              })}
             </div>
           </div>
 
           {/* Recent Activity */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-            <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-2xs">
-              <h2 className="font-bold text-slate-900 text-base mb-3.5">Recent Donations</h2>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="bg-white rounded-2xl border border-slate-200/90 p-5 sm:p-6 shadow-xs">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="font-bold text-slate-900 text-base">Recent Completed Donations</h2>
+                <span className="text-[11px] font-medium text-slate-400">Latest 5</span>
+              </div>
               <div className="space-y-2.5">
                 {(stats?.recent_donations || []).length > 0 ? (
                   stats.recent_donations.map((don) => (
-                    <div key={don.id} className="p-3 rounded-xl bg-slate-50/70 border border-slate-100 flex items-center justify-between text-xs">
-                      <div>
-                        <p className="font-semibold text-slate-900">{don.first_name} {don.last_name}</p>
+                    <div
+                      key={don.id}
+                      className="p-3.5 rounded-xl bg-slate-50/70 border border-slate-200/60 hover:bg-white hover:border-slate-300 transition-all flex items-center justify-between gap-3 text-xs"
+                    >
+                      <div className="min-w-0">
+                        <p className="font-semibold text-slate-900 truncate">{don.first_name} {don.last_name}</p>
                         <p className="text-slate-500 text-[11px] mt-0.5">{formatDate(don.donation_date)}</p>
                       </div>
-                      <span className="font-bold text-red-600 bg-white px-2.5 py-1 rounded-lg border border-slate-200">
-                        {don.blood_group} • {don.units_donated} Unit
+                      <span className="font-bold text-red-600 bg-white px-2.5 py-1 rounded-lg border border-slate-200 whitespace-nowrap flex-shrink-0">
+                        {don.blood_group} ({don.units_donated} Unit)
                       </span>
                     </div>
                   ))
                 ) : (
-                  <p className="text-xs text-slate-400 py-4 text-center">No recent donations recorded.</p>
+                  <p className="text-xs text-slate-400 py-8 text-center">No recent donations recorded.</p>
                 )}
               </div>
             </div>
 
-            <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-2xs">
-              <div className="flex items-center justify-between mb-3.5">
+            <div className="bg-white rounded-2xl border border-slate-200/90 p-5 sm:p-6 shadow-xs">
+              <div className="flex items-center justify-between mb-4">
                 <h2 className="font-bold text-slate-900 text-base">Recent Hospital Requests</h2>
                 <button
                   onClick={() => setActiveTab('requests')}
-                  className="text-xs font-semibold text-red-600 hover:text-red-700"
+                  className="text-xs font-semibold text-red-600 hover:text-red-700 transition-colors"
                 >
-                  View All →
+                  Manage All →
                 </button>
               </div>
               <div className="space-y-2.5">
                 {(stats?.recent_requests || []).length > 0 ? (
                   stats.recent_requests.map((req) => (
-                    <div key={req.id} className="p-3 rounded-xl bg-slate-50/70 border border-slate-100 flex flex-wrap items-center justify-between gap-2 text-xs">
+                    <div
+                      key={req.id}
+                      className="p-3.5 rounded-xl bg-slate-50/70 border border-slate-200/60 hover:bg-white hover:border-slate-300 transition-all flex flex-wrap items-center justify-between gap-2.5 text-xs"
+                    >
                       <div className="min-w-0">
-                        <p className="font-semibold text-slate-900 truncate">{req.patient_name} • {req.hospital_name}</p>
+                        <p className="font-semibold text-slate-900 truncate">
+                          {req.patient_name} <span className="text-slate-400 font-normal">•</span> {req.hospital_name}
+                        </p>
                         <p className="text-slate-500 text-[11px] mt-0.5">
-                          Need: {req.units_requested} Units of <span className="font-bold text-red-600">{req.blood_group}</span>
+                          Need: <span className="font-semibold text-slate-700">{req.units_fulfilled || 0}/{req.units_requested}</span> Units of{' '}
+                          <span className="font-bold text-red-600">{req.blood_group}</span>
                         </p>
                       </div>
                       <div className="flex items-center gap-1.5 flex-shrink-0">
-                        {['pending', 'approved', 'partially_fulfilled'].includes(req.status) && (
+                        {req.status === 'pending' && (
+                          <>
+                            <button
+                              onClick={() => handleUpdateRequestStatus(req.id, 'approved')}
+                              disabled={actionLoadingId === req.id}
+                              className="px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 font-semibold text-[11px] transition-colors disabled:opacity-50"
+                              title="Approve request"
+                            >
+                              Approve
+                            </button>
+                            <button
+                              onClick={() => handleUpdateRequestStatus(req.id, 'rejected')}
+                              disabled={actionLoadingId === req.id}
+                              className="px-2.5 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-semibold text-[11px] transition-colors disabled:opacity-50"
+                              title="Reject request"
+                            >
+                              Reject
+                            </button>
+                          </>
+                        )}
+                        {['approved', 'partially_fulfilled'].includes(req.status) && (
                           <button
                             onClick={() => handleGrantBlood(req.id)}
                             disabled={actionLoadingId === req.id}
                             className="px-2.5 py-1 rounded-lg bg-red-600 hover:bg-red-700 text-white font-semibold text-[11px] transition-colors flex items-center gap-1 disabled:opacity-50"
-                            title="Grant blood units from available inventory"
+                            title="Fulfill request from available inventory"
                           >
                             <Droplet className="w-3 h-3 fill-current" />
-                            {actionLoadingId === req.id ? 'Granting...' : 'Grant Blood'}
-                          </button>
-                        )}
-                        {req.status === 'pending' && (
-                          <button
-                            onClick={() => handleUpdateRequestStatus(req.id, 'approved')}
-                            disabled={actionLoadingId === req.id}
-                            className="px-2 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 font-semibold text-[11px] transition-colors"
-                            title="Approve request"
-                          >
-                            Approve
+                            {actionLoadingId === req.id ? 'Fulfilling...' : 'Fulfill'}
                           </button>
                         )}
                         <StatusBadge status={req.status} />
@@ -325,7 +369,7 @@ export const AdminDashboard = () => {
                     </div>
                   ))
                 ) : (
-                  <p className="text-xs text-slate-400 py-4 text-center">No recent hospital requests.</p>
+                  <p className="text-xs text-slate-400 py-8 text-center">No recent hospital requests.</p>
                 )}
               </div>
             </div>
@@ -381,33 +425,33 @@ export const AdminDashboard = () => {
                       </td>
                       <td className="py-3.5 px-4 text-right">
                         <div className="flex items-center justify-end gap-1.5">
-                          {['pending', 'approved', 'partially_fulfilled'].includes(req.status) && (
-                            <button
-                              onClick={() => handleGrantBlood(req.id)}
-                              disabled={actionLoadingId === req.id}
-                              className="px-2.5 py-1 rounded-lg bg-red-600 hover:bg-red-700 text-white font-semibold text-xs transition-colors flex items-center gap-1 disabled:opacity-50"
-                            >
-                              <Droplet className="w-3 h-3 fill-current" />
-                              Grant Blood
-                            </button>
-                          )}
                           {req.status === 'pending' && (
                             <>
                               <button
                                 onClick={() => handleUpdateRequestStatus(req.id, 'approved')}
                                 disabled={actionLoadingId === req.id}
-                                className="px-2 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 font-semibold text-xs transition-colors"
+                                className="px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 font-semibold text-xs transition-colors disabled:opacity-50"
                               >
                                 Approve
                               </button>
                               <button
                                 onClick={() => handleUpdateRequestStatus(req.id, 'rejected')}
                                 disabled={actionLoadingId === req.id}
-                                className="px-2 py-1 rounded-lg text-rose-600 hover:bg-rose-50 font-semibold text-xs transition-colors"
+                                className="px-2.5 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-semibold text-xs transition-colors disabled:opacity-50"
                               >
                                 Reject
                               </button>
                             </>
+                          )}
+                          {['approved', 'partially_fulfilled'].includes(req.status) && (
+                            <button
+                              onClick={() => handleGrantBlood(req.id)}
+                              disabled={actionLoadingId === req.id}
+                              className="px-2.5 py-1 rounded-lg bg-red-600 hover:bg-red-700 text-white font-semibold text-xs transition-colors flex items-center gap-1 disabled:opacity-50"
+                            >
+                              <Droplet className="w-3 h-3 fill-current" />
+                              {actionLoadingId === req.id ? 'Fulfilling...' : 'Fulfill'}
+                            </button>
                           )}
                         </div>
                       </td>

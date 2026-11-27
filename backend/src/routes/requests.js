@@ -111,6 +111,16 @@ router.get('/', authenticate, async (req, res) => {
   }
 });
 
+// Valid request status transitions
+const VALID_REQUEST_TRANSITIONS = {
+  pending: ['approved', 'rejected', 'cancelled'],
+  approved: ['rejected', 'cancelled'],
+  partially_fulfilled: ['cancelled'],
+  fulfilled: [],
+  rejected: [],
+  cancelled: []
+};
+
 // PATCH /api/requests/:id/status - Update request status (Staff/Admin approval, or Requester cancel)
 router.patch('/:id/status', authenticate, async (req, res) => {
   const { id } = req.params;
@@ -138,6 +148,14 @@ router.patch('/:id/status', authenticate, async (req, res) => {
       }
     } else if (!['staff', 'admin'].includes(req.user.role)) {
       return res.status(403).json({ success: false, message: 'Permission denied' });
+    }
+
+    const allowedNext = VALID_REQUEST_TRANSITIONS[request.status] || [];
+    if (!allowedNext.includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: `Cannot change request status from '${request.status}' to '${status}'`
+      });
     }
 
     await db.execute(`

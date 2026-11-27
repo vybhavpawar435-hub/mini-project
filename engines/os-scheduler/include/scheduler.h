@@ -83,6 +83,7 @@ private:
     // Counting semaphore implemented with condition_variable + counter
     int sem_count_;
     int sem_max_;
+    int peak_used_slots_;
     std::condition_variable sem_cv_;
     std::mutex sem_mtx_;
 

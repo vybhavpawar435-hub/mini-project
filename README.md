@@ -1,229 +1,193 @@
-# Blood Bank and Donor Slot Management System with Compatibility Matching (HemoSync)
+# 🩸 HemoSync – Blood Bank & Donor Slot Management System
 
-A production-grade, end-to-end full-stack college mini project integrating four computer science engines into a unified medical blood bank platform.
-
----
-
-## 1. Integrated Engines Overview
-
-| Engine | Discipline | Technology | Core Features | Port |
-| :--- | :--- | :--- | :--- | :--- |
-| **Engine 01** | **OS Donor Slot Scheduler** | C++17, WinSock2, pthreads | FCFS, Priority & Round Robin scheduling; Mutex locks; Semaphore capacity control; Donor state transitions (REGISTERED $\to$ WAITING $\to$ CONFIRMED $\to$ DONATED) | `5001` |
-| **Engine 02** | **DSA Compatibility Matcher** | C++17, WinSock2 | Directed graph with 8 blood groups (27 RBC compatibility edges); BFS & DFS traversals; AVL tree donor indexing ($O(\log N)$); Chained Hash Map ($O(1)$) | `5002` |
-| **Engine 03** | **DBMS Inventory & Records** | MySQL 8.0+, InnoDB | BCNF normalization; ACID transactions; Row-level locking (`SELECT ... FOR UPDATE`); Duplicate booking prevention; Stored procedures & triggers | `3306` |
-| **Engine 04** | **Web Control Dashboard** | React 18, Vite, Tailwind CSS, Axios, Express.js | 4 Role Dashboards (Donor, Staff, Admin, Requester); JWT authentication; BCrypt; Interactive visualizers for OS queue & DSA graph | `3000` (API) <br>`5173` (UI) |
+> A full-stack blood bank management system built as a college mini-project, integrating four core Computer Science concepts: **Operating Systems**, **Data Structures & Algorithms**, **Database Management Systems**, and **Web Development**.
 
 ---
 
-## 2. User Roles & Demo Credentials
+## 📌 Project Overview
 
-The database comes pre-seeded with 30 donors, 2 clinical staff members, 1 system administrator, 3 hospital requesters, donation slots, inventory, and sample requests.
-
-| Role | Email Address | Password | Permissions & Dashboard Features |
-| :--- | :--- | :--- | :--- |
-| **Donor** | `donor1@bloodbank.com` | `password123` | View available slots, book appointments with priority, view status, cancel bookings, view donation history |
-| **Blood Bank Staff** | `staff@bloodbank.com` | `password123` | View clinic donor queue, triage arrival, record physical donations with vitals (Hb, BP, Temp), commit blood units to inventory |
-| **System Admin** | `admin@bloodbank.com` | `password123` | Switch scheduling algorithms (FCFS, Priority, Round Robin), view real-time engine metrics, trigger 50 concurrent requests simulation, manage users, view audit trail |
-| **Blood Requester** | `requester@bloodbank.com` | `password123` | Submit hospital blood requests with urgency levels, test patient-to-donor compatibility, check live compatible stock, track fulfillment |
-
-> **Note**: You can also use the **Quick Demo Login buttons** on the login page (`/login`) to switch between any of these roles with a single click!
+HemoSync is a web-based platform that manages:
+- Donor registration and appointment scheduling
+- Blood group compatibility matching
+- Blood inventory and hospital request management
+- Role-based dashboards for Admin, Staff, Donor, and Requester
 
 ---
 
-## 3. Project Structure
+## 🧩 System Architecture – 4 Engines
 
-```text
+| Engine | Concept | Technology | Port |
+|--------|---------|------------|------|
+| **OS Scheduler** | Donor slot scheduling using FCFS, Priority & Round Robin algorithms with Semaphore-based concurrency | C++ (custom HTTP server) | 5001 |
+| **DSA Compatibility** | Blood group compatibility matching using a Directed Graph | C++ (custom HTTP server) | 5002 |
+| **DBMS** | Blood inventory, appointment, and request management with ACID transactions | MySQL / MariaDB | 3306 |
+| **WEB** | Full-stack dashboard with role-based authentication | React + Node.js/Express | 5173 / 3000 |
+
+---
+
+## 🛠️ Tech Stack
+
+**Frontend:** React 18, Vite, Tailwind CSS, Lucide Icons  
+**Backend:** Node.js, Express.js, mysql2, JWT Authentication  
+**Database:** MySQL / MariaDB (via XAMPP)  
+**C++ Engines:** MinGW g++, Winsock2 (Windows HTTP servers)
+
+---
+
+## 👥 User Roles
+
+| Role | Access |
+|------|--------|
+| **Admin** | Full system access — manage users, inventory, hospital requests, OS scheduler |
+| **Staff** | View & manage donor appointments, record donations |
+| **Donor** | Book donation slots, view history |
+| **Requester** | Submit hospital blood requests, check compatibility |
+
+---
+
+## 🚀 Getting Started
+
+### Prerequisites
+- [Node.js](https://nodejs.org/) (v18+)
+- [XAMPP](https://www.apachefriends.org/) (for MySQL)
+- Windows OS (C++ engines use Winsock2)
+
+### 1. Clone the repository
+```bash
+git clone https://github.com/vybhavpawar435-hub/mini-project.git
+cd mini-project
+```
+
+### 2. Set up the database
+1. Start XAMPP and launch MySQL
+2. Open phpMyAdmin → Create database: `blood_bank_system`
+3. Import the schema: `database/schema.sql`
+4. Import seed data: `database/seeds.sql`
+
+### 3. Configure backend environment
+```bash
+cd backend
+cp .env.example .env
+# Edit .env with your DB credentials and JWT secret
+```
+
+### 4. Install dependencies
+```bash
+# Backend
+cd backend
+npm install
+
+# Frontend
+cd ../frontend
+npm install
+```
+
+### 5. Start all services
+
+**Option A – All at once (Windows)**
+```powershell
+# From project root (PowerShell)
+.\run-all.ps1
+```
+
+**Option B – Manually**
+```powershell
+# Terminal 1 – MySQL (via XAMPP dashboard or:)
+& "C:\xampp\mysql\bin\mysqld.exe" --defaults-file="C:\xampp\mysql\bin\my.ini" --standalone
+
+# Terminal 2 – OS Scheduler Engine
+& ".\engines\os-scheduler\scheduler_engine.exe" 5001
+
+# Terminal 3 – DSA Compatibility Engine
+& ".\engines\dsa-compatibility\compatibility_engine.exe" 5002
+
+# Terminal 4 – Backend API
+cd backend; node src/server.js
+
+# Terminal 5 – Frontend
+cd frontend; npm run dev
+```
+
+### 6. Open in browser
+```
+http://localhost:5173
+```
+
+---
+
+## 🔐 Default Credentials (Development Only)
+
+| Role | Email | Password |
+|------|-------|----------|
+| Admin | admin@hemosync.com | admin123 |
+| Staff | staff@hemosync.com | staff123 |
+| Donor | donor@hemosync.com | donor123 |
+
+> ⚠️ Change these credentials before any production use.
+
+---
+
+## 📂 Project Structure
+
+```
 blood-bank-system/
-├── backend/
+├── backend/                  # Node.js / Express API
 │   ├── src/
-│   │   ├── controllers/
-│   │   ├── middleware/        # JWT authentication & Role-Based Access Control
-│   │   ├── routes/            # REST API route handlers
-│   │   │   ├── auth.js        # Login & registration
-│   │   │   ├── donors.js      # Donor profiles & history
-│   │   │   ├── slots.js       # Slot creation & listing
-│   │   │   ├── appointments.js# ACID booking & state transitions
-│   │   │   ├── scheduler.js   # Bridge to C++ OS engine
-│   │   │   ├── compatibility.js# Bridge to C++ DSA engine
-│   │   │   ├── inventory.js   # DBMS inventory & FIFO fulfillment
-│   │   │   ├── requests.js    # Hospital blood requests
-│   │   │   └── admin.js       # Metrics & audit logs
-│   │   ├── utils/             # DB connection pool, JWT helper, audit logger
-│   │   └── server.js          # Main Express server entry point
-│   ├── .env                   # Environment configuration
+│   │   ├── routes/           # auth, requests, inventory, scheduler, compatibility
+│   │   ├── middleware/       # JWT auth, role-based access control
+│   │   └── utils/            # db pool, audit logger
+│   ├── .env.example
 │   └── package.json
-├── frontend/
+│
+├── frontend/                 # React + Vite SPA
 │   ├── src/
-│   │   ├── components/        # Layout, Navbar, Sidebar, StatusBadge
-│   │   │   ├── CompatibilityVisualizer.jsx # Interactive 8-group directed graph & BFS/DFS
-│   │   │   └── SchedulerQueueVisualizer.jsx# Live queue, algorithm switcher & simulation
-│   │   ├── context/           # AuthContext (JWT management)
-│   │   ├── pages/             # Donor, Staff, Admin, Requester Dashboards
-│   │   ├── services/          # Axios HTTP client with interceptors
-│   │   ├── App.jsx            # React Router route tree with guards
-│   │   └── main.jsx
-│   ├── index.html
-│   ├── vite.config.js
-│   ├── tailwind.config.js
+│   │   ├── pages/            # AdminDashboard, StaffDashboard, DonorDashboard, ...
+│   │   ├── components/       # Navbar, Sidebar, StatusBadge, SchedulerVisualizer
+│   │   ├── context/          # AuthContext (JWT)
+│   │   └── services/         # axios API client
 │   └── package.json
+│
 ├── engines/
-│   ├── os-scheduler/          # ENGINE 01 (C++17)
-│   │   ├── include/scheduler.h
-│   │   ├── src/scheduler.cpp
-│   │   ├── src/scheduler_server.cpp
-│   │   ├── src/main.cpp
-│   │   ├── CMakeLists.txt
-│   │   └── scheduler_engine.exe
-│   └── dsa-compatibility/     # ENGINE 02 (C++17)
-│       ├── include/compatibility.h
-│       ├── src/compatibility.cpp
-│       ├── src/compatibility_server.cpp
-│       ├── src/main.cpp
-│       ├── CMakeLists.txt
-│       └── compatibility_engine.exe
-├── database/
-│   ├── schema.sql             # BCNF schema, constraints, stored procedures, triggers
-│   └── seed.sql               # 30 donors, 8 blood groups, inventory, slots, requests
-├── tests/
-│   ├── test_os_engine.cpp     # Multithreading, mutex, semaphores, transitions unit test
-│   ├── test_dsa_engine.cpp    # 8 blood groups RBC rules, BFS, DFS, AVL, hash map unit test
-│   ├── test_dbms.js           # ACID rollback, double-booking prevention, FK test
-│   └── test_api.js            # REST API integration & RBAC tests
-├── docs/
-│   ├── architecture.md        # Architectural diagrams & inter-engine protocols
-│   └── database_er.md         # Mermaid ER diagram & normalization proofs
-├── start-all.bat              # One-click launch script for all engines and UI
+│   ├── os-scheduler/         # C++ FCFS/Priority/RoundRobin + Semaphore engine
+│   └── dsa-compatibility/    # C++ Directed Graph blood compatibility engine
+│
+├── database/                 # SQL schema and seed files
+├── docs/                     # Engine workflow documentation
+├── run-all.ps1               # One-click startup script
 └── README.md
 ```
 
 ---
 
-## 4. Setup & Running Instructions
+## ✨ Key Features
 
-### Prerequisites
-- **Node.js** (v18+ recommended; v24 installed)
-- **MinGW-W64 / GCC C++17** (C++ engines come pre-compiled as standalone `.exe` executables)
-- **MySQL / MariaDB** (Port 3306)
-
----
-
-### Step 1: Database Setup
-1. Start your local MySQL service (e.g. via XAMPP or MySQL Server).
-2. Create the database and import the schema and seed data:
-```bash
-mysql -u root -p < database/schema.sql
-mysql -u root -p < database/seed.sql
-```
-*(If your MySQL root user has no password, omit the `-p` flag)*.
+- ✅ Secure JWT-based login with role-based access control
+- ✅ Hospital blood request workflow: **Pending → Approved → Fulfilled**
+- ✅ FIFO-based blood inventory deduction (by expiry date)
+- ✅ DSA compatibility matching (allocates compatible donor groups, not just exact match)
+- ✅ OS Scheduling simulation (FCFS, Priority, Round Robin) with semaphore concurrency
+- ✅ Real-time slot capacity tracking
+- ✅ Audit trail for all critical actions
+- ✅ Responsive design (desktop & mobile)
 
 ---
 
-### Step 2: Start C++ Engines (OS Scheduler & DSA Matcher)
+## 📄 Documentation
 
-Open two terminal windows:
-
-**Terminal 1 - Engine 01 (OS Scheduler):**
-```bash
-cd engines/os-scheduler
-./scheduler_engine.exe 5001
-```
-*Listens on `http://localhost:5001`*
-
-**Terminal 2 - Engine 02 (DSA Compatibility):**
-```bash
-cd engines/dsa-compatibility
-./compatibility_engine.exe 5002
-```
-*Listens on `http://localhost:5002`*
-
-*(Optional) To recompile the C++ engines manually:*
-```bash
-# OS Scheduler
-g++ -static -std=c++17 -Iinclude src/scheduler.cpp src/scheduler_server.cpp src/main.cpp -o scheduler_engine.exe -lws2_32 -lpthread
-
-# DSA Matcher
-g++ -static -std=c++17 -Iinclude src/compatibility.cpp src/compatibility_server.cpp src/main.cpp -o compatibility_engine.exe -lws2_32
-```
+Detailed workflow explanations for each engine are in the `docs/` folder:
+- `ENGINE_01_OS_SCHEDULER.txt`
+- `ENGINE_02_DSA_COMPATIBILITY.txt`
+- `ENGINE_03_DBMS_INVENTORY.txt`
+- `ENGINE_04_WEB_DASHBOARD.txt`
 
 ---
 
-### Step 3: Start Node.js Backend
+## 👨‍💻 Team
 
-**Terminal 3 - Backend API:**
-```bash
-cd backend
-npm start
-```
-*Runs on `http://localhost:3000`*
+> Mini-project submitted for academic evaluation.
 
 ---
 
-### Step 4: Start React Frontend
+## 📝 License
 
-**Terminal 4 - Frontend Web Application:**
-```bash
-cd frontend
-npm run dev
-```
-*Opens on `http://localhost:5173`*
-
----
-
-### Easy Launch: One-Click Startup Script
-
-On Windows, simply double-click `start-all.bat` or run:
-```bat
-start-all.bat
-```
-This automatically launches both C++ engines, the Node.js backend server, and the Vite frontend application.
-
----
-
-## 5. Verification & Running Test Suites
-
-Run each engine test suite independently:
-
-### 1. Test DSA Compatibility Engine (C++):
-```bash
-g++ -static -std=c++17 -Iengines/dsa-compatibility/include engines/dsa-compatibility/src/compatibility.cpp tests/test_dsa_engine.cpp -o tests/test_dsa_engine.exe
-./tests/test_dsa_engine.exe
-```
-*Verifies: Universal Donor (O-), Universal Recipient (AB+), all 8 blood groups red cell compatibility, rejection of incompatible transfers, Graph BFS traversal, DFS traversal, AVL tree insertion/search, and BloodHashMap $O(1)$ lookups.*
-
-### 2. Test OS Donor Slot Scheduler (C++):
-```bash
-g++ -static -std=c++17 -Iengines/os-scheduler/include engines/os-scheduler/src/scheduler.cpp tests/test_os_engine.cpp -o tests/test_os_engine.exe -lws2_32 -lpthread
-./tests/test_os_engine.exe
-```
-*Verifies: Donor state machine transitions, FCFS ordering, Priority scheduling ordering, Round Robin simulation, and 50 simultaneous threads competing for a single slot with mutex and semaphore protection.*
-
-### 3. Test DBMS Engine (JavaScript / MySQL):
-```bash
-cd tests
-node test_dbms.js
-```
-*Verifies: Schema normalization, foreign key cascade actions, double-booking prevention, and ACID transaction rollbacks.*
-
-### 4. Test Web REST APIs & RBAC:
-```bash
-cd tests
-node test_api.js
-```
-*Verifies: JWT token generation, role-based authorization, slot booking, and C++ engine API responses.*
-
----
-
-## 6. Red Blood Cell Compatibility Reference Rules
-
-| Donor Group | Can Donate Red Blood Cells To |
-| :--- | :--- |
-| **O-** (Universal Donor) | **All Blood Groups** (A+, A-, B+, B-, AB+, AB-, O+, O-) |
-| **O+** | A+, B+, AB+, O+ |
-| **A-** | A+, A-, AB+, AB- |
-| **A+** | A+, AB+ |
-| **B-** | B+, B-, AB+, AB- |
-| **B+** | B+, AB+ |
-| **AB-** | AB+, AB- |
-| **AB+** (Universal Recipient)| AB+ Only |
-#   m i n i - p r o j e c t  
- 
+This project is for educational purposes only.
